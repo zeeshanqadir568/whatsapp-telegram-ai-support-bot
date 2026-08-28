@@ -161,6 +161,18 @@
                         </div>
                     </div>
 
+                    <!-- Upload Custom Knowledge Base Document Form -->
+                    <div class="upload-box" style="margin-bottom: 1.25rem; padding: 1rem; background: rgba(15,23,42,0.6); border: 1px dashed var(--border-color); border-radius: var(--radius-md);">
+                        <h5 style="margin-bottom: 0.5rem; font-size: 0.9rem;"><i class="fa-solid fa-cloud-arrow-up text-accent"></i> Upload Custom Knowledge Base Document</h5>
+                        <form id="upload-form" onsubmit="handleUploadDocument(event)" style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="file" id="kb-file-input" accept=".pdf,.txt,.md" required style="font-size: 0.82rem; color: var(--text-muted);">
+                            <button type="submit" class="btn-sm btn-outline" style="background: var(--accent-purple); color: white; border: none; font-weight: 600;">
+                                <i class="fa-solid fa-upload"></i> Upload & Ingest
+                            </button>
+                        </form>
+                        <div id="upload-status-msg" style="font-size: 0.78rem; margin-top: 0.5rem; color: #4ade80;"></div>
+                    </div>
+
                     <div class="kb-preview">
                         <div class="kb-doc-card">
                             <div class="kb-doc-header">

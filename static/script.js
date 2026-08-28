@@ -202,6 +202,47 @@ function copyCurl() {
     alert("cURL command copied to clipboard!");
 }
 
+// Handle uploading knowledge base documents
+async function handleUploadDocument(event) {
+    event.preventDefault();
+    const fileInput = document.getElementById("kb-file-input");
+    const statusMsg = document.getElementById("upload-status-msg");
+    if (!fileInput.files || fileInput.files.length === 0) return;
+
+    const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+
+    statusMsg.style.color = "#a5b4fc";
+    statusMsg.innerText = "Uploading and chunking document into ChromaDB...";
+
+    try {
+        const response = await fetch("/api/upload", {
+            method: "POST",
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            statusMsg.style.color = "#f87171";
+            statusMsg.innerText = "Upload failed: " + (errData.detail || "Error uploading file");
+            return;
+        }
+
+        const data = await response.json();
+        statusMsg.style.color = "#4ade80";
+        statusMsg.innerText = `✓ Ingested '${data.filename}' (+${data.chunks_added} chunks). Total KB Docs: ${data.total_vector_documents}`;
+        
+        fileInput.value = "";
+        fetchHealthStatus();
+
+    } catch (error) {
+        statusMsg.style.color = "#f87171";
+        statusMsg.innerText = "Upload failed: Network error";
+        console.error("Upload error:", error);
+    }
+}
+
 // HTML Safety Helper
 function escapeHtml(text) {
     if (!text) return "";
@@ -212,3 +253,4 @@ function escapeHtml(text) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+

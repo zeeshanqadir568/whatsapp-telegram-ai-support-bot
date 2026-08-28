@@ -210,11 +210,157 @@ def get_leads(db: Session = Depends(get_db)):
         return []
 
 
+@app.post("/api/upload")
+async def upload_document(file: UploadFile = File(...)):
+    """API endpoint allowing clients to upload custom PDF, TXT, or MD knowledge base files."""
+    try:
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in [".pdf", ".txt", ".md"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file format: {ext}. Allowed formats: .pdf, .txt, .md"
+            )
+
+        upload_dir = os.path.join(os.path.dirname(__file__), "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        save_path = os.path.join(upload_dir, file.filename)
+        with open(save_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+
+        chunks_added = rag_engine.ingest_file(save_path)
+        total_docs = rag_engine.vector_manager.get_document_count()
+
+        return {
+            "status": "success",
+            "filename": file.filename,
+            "chunks_added": chunks_added,
+            "total_vector_documents": total_docs,
+            "message": f"Successfully ingested '{file.filename}' into ChromaDB knowledge base."
+        }
+    except Exception as err:
+        logger.error(f"Error uploading document: {err}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to ingest document: {str(err)}"
+        )
+
+
+@app.post("/webhook/telegram")
+async def telegram_webhook(update: dict, db: Session = Depends(get_db)):
+    """Webhook receiver for Telegram Bot API integration."""
+    try:
+        message = update.get("message", {})
+        chat_id = str(message.get("chat", {}).get("id", ""))
+        text = message.get("text", "")
+
+        if not chat_id or not text:
+            return {"status": "ignored"}
+
+        # Process through RAG Engine
+        reply_text, sources, lead_info = rag_engine.answer_query(
+            query=text,
+            chat_history=[],
+            top_k=3
+        )
+
+        # Log conversation record
+        user_msg = models.Conversation(session_id=chat_id, channel="telegram", role="user", content=text)
+        bot_msg = models.Conversation(session_id=chat_id, channel="telegram", role="assistant", content=reply_text)
+        db.add(user_msg)
+        db.add(bot_msg)
+
+        if lead_info.get("has_lead"):
+            lead = models.Lead(
+                session_id=chat_id,
+                channel="telegram",
+                email=lead_info.get("email"),
+                phone=lead_info.get("phone"),
+                name=lead_info.get("name"),
+                intent=lead_info.get("intent", "telegram_inquiry")
+            )
+            db.add(lead)
+
+        db.commit()
+
+        # Send response via Telegram HTTP API if token present
+        tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+        if tg_token:
+            import httpx
+            async with httpx.AsyncClient() as client:
+                await client.post(
+                    f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                    json={"chat_id": chat_id, "text": reply_text}
+                )
+
+        return {"status": "ok", "reply": reply_text, "chat_id": chat_id}
+    except Exception as err:
+        logger.error(f"Telegram webhook error: {err}")
+        return {"status": "error", "detail": str(err)}
+
+
+@app.get("/webhook/whatsapp")
+def verify_whatsapp_webhook(
+    hub_mode: Optional[str] = None,
+    hub_verify_token: Optional[str] = None,
+    hub_challenge: Optional[str] = None
+):
+    """Meta WhatsApp Cloud API webhook verification handler."""
+    verify_token = os.getenv("WHATSAPP_VERIFY_TOKEN", "my_verify_token")
+    if hub_mode == "subscribe" and hub_verify_token == verify_token:
+        return int(hub_challenge) if hub_challenge and hub_challenge.isdigit() else hub_challenge
+    raise HTTPException(status_code=403, detail="Verification token mismatch")
+
+
+@app.post("/webhook/whatsapp")
+async def whatsapp_webhook(payload: dict, db: Session = Depends(get_db)):
+    """Meta WhatsApp Cloud API & Twilio webhook incoming message receiver."""
+    try:
+        # Extract message from Meta payload structure
+        entry = payload.get("entry", [{}])[0]
+        changes = entry.get("changes", [{}])[0]
+        value = changes.get("value", {})
+        messages = value.get("messages", [])
+
+        if not messages:
+            return {"status": "ignored"}
+
+        msg_obj = messages[0]
+        from_number = msg_obj.get("from", "unknown_user")
+        text = msg_obj.get("text", {}).get("body", "")
+
+        if not text:
+            return {"status": "ignored"}
+
+        reply_text, sources, lead_info = rag_engine.answer_query(query=text, top_k=3)
+
+        # Log conversation
+        db.add(models.Conversation(session_id=from_number, channel="whatsapp", role="user", content=text))
+        db.add(models.Conversation(session_id=from_number, channel="whatsapp", role="assistant", content=reply_text))
+
+        if lead_info.get("has_lead"):
+            db.add(models.Lead(
+                session_id=from_number,
+                channel="whatsapp",
+                email=lead_info.get("email"),
+                phone=lead_info.get("phone") or from_number,
+                intent="whatsapp_inquiry"
+            ))
+
+        db.commit()
+        return {"status": "ok", "reply": reply_text, "from": from_number}
+    except Exception as err:
+        logger.error(f"WhatsApp webhook error: {err}")
+        return {"status": "error", "detail": str(err)}
+
+
 # Mount static files directory for frontend UI
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if not os.path.exists(static_dir):
     os.makedirs(static_dir)
 
+from fastapi import UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
@@ -228,4 +374,5 @@ def read_root():
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return {"message": "AI Support Bot API is running. Visit /docs for OpenAPI documentation."}
+
 
