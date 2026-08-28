@@ -2,8 +2,8 @@
 
 **Project**: WhatsApp & Telegram AI Support Bot (RAG Starter Kit)  
 **Repository**: [https://github.com/zeeshanqadir568/whatsapp-telegram-ai-support-bot](https://github.com/zeeshanqadir568/whatsapp-telegram-ai-support-bot)  
-**Date**: August 28, 2026  
-**Last Updated**: 7:11 PM PKT  
+**Date**: August 28-29, 2026  
+**Last Updated**: Aug 29, 2:19 AM PKT  
 
 ---
 
@@ -28,7 +28,7 @@
 - **Knowledge Base Tab**: ChromaDB vector store document viewer.
 - **Static File Serving**: `app.py` serves `static/` via FastAPI `StaticFiles` mount.
 
-### Session 4: Production Features (Current Session)
+### Session 4: Production Features
 - **Document Upload Endpoint** (`POST /api/upload`):
   - Accepts `.pdf`, `.txt`, `.md` files.
   - Saves to `/uploads/` directory, ingests into ChromaDB via `rag_engine.ingest_file()`.
@@ -47,61 +47,61 @@
   - `POST`: Processes incoming WhatsApp messages, logs conversations & leads.
   - Uses `WHATSAPP_VERIFY_TOKEN` env var for verification.
 
-- **Session Logging Rule**: Created `.agents/rules/session_logging.md` — permanent rule for mandatory session log updates.
+- **Session Logging Rule**: Created `.agents/rules/session_logging.md`.
+
+### Session 5: Docker Build & Deployment (Current)
+- **Docker Build**: Successfully rebuilt Docker image with all new code and `python-multipart` dependency.
+- **Server Verified**: `GET /health` returns `{"status":"ok","database_status":"healthy","vector_store_documents":2}`.
+- **Website Live**: Dashboard serving at `http://localhost:8000/` — all 3 tabs functional.
+- **README Rewrite**: Complete professional README with:
+  - Mermaid architecture diagram showing all platforms
+  - Feature comparison table
+  - Full API reference (6 endpoints)
+  - WhatsApp & Telegram webhook setup guides
+  - Document upload instructions
+  - Environment variable reference table
+  - Project structure tree
+- **`.env.example` Updated**: Added `TELEGRAM_BOT_TOKEN`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, and `WHATSAPP_PHONE_NUMBER_ID`.
 
 ---
 
-## 🐛 Known Issues & Pending Items
+## 📁 All Files in Project
 
-### Docker Build (Network Issue)
-- Docker rebuild failed due to **extremely slow network** (~11 KB/s inside Docker container).
-- PyTorch wheel alone (527 MB) would take hours at that speed.
-- **Resolution**: Run `docker compose up -d --build` when network is faster. The code is correct and will build successfully.
-
-### To Rebuild Successfully
-```bash
-# When network is stable, run from project root:
-docker compose up -d --build
-
-# Wait ~5-10 minutes for pip install + HuggingFace model download
-# Then verify:
-curl http://localhost:8000/health
-```
-
----
-
-## 📁 Files Modified This Session
-
-| File | Change |
-|------|--------|
-| `app.py` | Added `UploadFile, File` imports; added `/api/upload`, `/webhook/telegram`, `/webhook/whatsapp` endpoints |
-| `requirements.txt` | Added `python-multipart>=0.0.9` |
-| `static/index.html` | Added file upload form in Knowledge Base tab |
-| `static/script.js` | Added `handleUploadDocument()` function |
-| `SESSION_LOG.md` | This file — full development audit |
-| `.agents/rules/session_logging.md` | Permanent session logging rule |
+| File | Purpose |
+|------|---------|
+| `app.py` | FastAPI routes, webhooks, upload endpoint & startup seeding |
+| `rag_engine.py` | RAG core, ChromaDB manager, LLM fallback & lead extraction |
+| `database.py` | SQLAlchemy engine & session setup |
+| `models.py` | Database models (Conversation, Lead) |
+| `eval_retrieval.py` | Retrieval benchmark suite |
+| `requirements.txt` | Python dependencies (18 packages) |
+| `Dockerfile` | Production Docker image configuration |
+| `docker-compose.yml` | Docker Compose setup |
+| `.env.example` | Environment variables template (with webhook vars) |
+| `README.md` | Comprehensive project documentation |
+| `SESSION_LOG.md` | This file — complete development audit |
+| `.gitignore` | Git ignore rules |
+| `static/index.html` | Dashboard HTML (chat, leads, KB tabs) |
+| `static/script.js` | Frontend logic (API calls, chat, upload) |
+| `static/style.css` | Dashboard styling (dark theme, responsive) |
+| `tests/__init__.py` | Test package init |
+| `tests/test_app.py` | API endpoint tests |
+| `tests/test_rag_engine.py` | RAG engine tests |
+| `.agents/rules/session_logging.md` | Session logging workspace rule |
 
 ---
 
-## 🔄 Git Commit History (Aug 28)
+## 🔄 Git Commit History
 
 | Commit | Message |
 |--------|---------|
+| Latest | docs: comprehensive README rewrite with webhooks, upload, dashboard, env vars |
+| `028ab65` | docs: update SESSION_LOG.md with complete session audit and resume instructions |
 | `a684739` | fix: add python-multipart dep, fix UploadFile/File imports for file upload endpoint |
 | `63cd156` | docs: add session logging rule for workspace |
 | `c7293a2` | docs: add SESSION_LOG.md detailing complete development audit and webhooks |
 | `3a83947` | feat: add custom document uploader endpoint and Telegram/WhatsApp webhooks |
-| `47ffb83` | (earlier commits — README, frontend, bug fixes, initial push) |
-
----
-
-## 🚀 How to Resume Work
-
-1. **Rebuild Docker** (when network is stable): `docker compose up -d --build`
-2. **Verify**: `curl http://localhost:8000/health` → should return `{"status":"ok",...}`
-3. **Test Upload**: Go to `http://localhost:8000/` → Knowledge Base tab → Upload a `.txt` file
-4. **Test Chat**: Use the chat simulator to ask questions
-5. **Remaining Work**:
-   - Update `.env.example` with `TELEGRAM_BOT_TOKEN` and `WHATSAPP_VERIFY_TOKEN` variables
-   - Test Telegram/WhatsApp webhooks with real bot tokens
-   - Consider adding API key authentication for production security
+| `47ffb83` | feat: add interactive web frontend chat simulator & sales lead dashboard |
+| `c36c919` | chore: update contribution activity for Aug 28 |
+| `a6cda05` | docs: add comprehensive README with non-technical and developer guides |
+| `0534764` | Initial commit: WhatsApp & Telegram AI Support Bot starter kit with RAG Engine |
