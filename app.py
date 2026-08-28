@@ -177,7 +177,6 @@ def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
             sources=sources,
             lead_captured=lead_captured
         )
-
     except Exception as err:
         logger.error(f"Error processing /chat request: {err}", exc_info=True)
         db.rollback()
@@ -185,3 +184,48 @@ def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while processing your message: {str(err)}"
         )
+
+
+@app.get("/api/leads")
+def get_leads(db: Session = Depends(get_db)):
+    """API endpoint retrieving captured sales leads from SQLite database."""
+    try:
+        leads = db.query(models.Lead).order_by(models.Lead.created_at.desc()).all()
+        return [
+            {
+                "id": l.id,
+                "session_id": l.session_id,
+                "channel": l.channel,
+                "name": l.name,
+                "email": l.email,
+                "phone": l.phone,
+                "intent": l.intent,
+                "notes": l.notes,
+                "created_at": l.created_at.strftime("%Y-%m-%d %H:%M:%S") if l.created_at else None
+            }
+            for l in leads
+        ]
+    except Exception as err:
+        logger.error(f"Error fetching leads: {err}")
+        return []
+
+
+# Mount static files directory for frontend UI
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if not os.path.exists(static_dir):
+    os.makedirs(static_dir)
+
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+
+@app.get("/")
+def read_root():
+    """Serves the interactive single-page web dashboard."""
+    index_path = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "AI Support Bot API is running. Visit /docs for OpenAPI documentation."}
+

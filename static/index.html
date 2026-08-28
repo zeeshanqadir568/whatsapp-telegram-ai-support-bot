@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Customer Support Bot - Live Demo & Admin Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header class="navbar">
+        <div class="logo">
+            <i class="fa-solid fa-robot logo-icon"></i>
+            <div>
+                <h1>AI Support Assistant</h1>
+                <p class="subtitle">WhatsApp & Telegram RAG Customer Bot</p>
+            </div>
+        </div>
+
+        <div class="header-badges">
+            <div class="badge-card" id="badge-llm">
+                <i class="fa-solid fa-brain"></i>
+                <span>LLM: <strong id="val-llm">Loading...</strong></span>
+            </div>
+            <div class="badge-card" id="badge-docs">
+                <i class="fa-solid fa-book"></i>
+                <span>KB Docs: <strong id="val-docs">0</strong></span>
+            </div>
+            <div class="badge-card status-healthy" id="badge-status">
+                <span class="status-dot"></span>
+                <span id="val-status">API Online</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="app-layout">
+        
+        <!-- Left Side: Interactive Live Chat Simulator -->
+        <section class="chat-section">
+            <div class="card chat-card">
+                <div class="chat-header">
+                    <div class="avatar">
+                        <i class="fa-solid fa-user-doctor"></i>
+                    </div>
+                    <div class="chat-title-info">
+                        <h3>Apex Dental Clinic Assistant</h3>
+                        <span class="online-indicator"><i class="fa-solid fa-circle"></i> Always Active</span>
+                    </div>
+                    <div class="channel-selector">
+                        <label for="channel-select"><i class="fa-solid fa-comments"></i> Channel:</label>
+                        <select id="channel-select">
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="telegram">Telegram</option>
+                            <option value="api" selected>Web API</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Chat History Messages Window -->
+                <div class="chat-messages" id="chat-messages">
+                    <div class="message system-msg">
+                        <div class="msg-content">
+                            <i class="fa-solid fa-circle-info"></i> Welcome! Try asking about business hours, dental cleaning prices, emergency hotline, or leave your phone/email to see lead capture in action.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Prompt Suggestions -->
+                <div class="quick-prompts">
+                    <button class="prompt-chip" onclick="sendQuickPrompt('What are your business hours?')">
+                        <i class="fa-regular fa-clock"></i> Business Hours
+                    </button>
+                    <button class="prompt-chip" onclick="sendQuickPrompt('How much is teeth whitening and routine cleaning?')">
+                        <i class="fa-solid fa-dollar-sign"></i> Services & Prices
+                    </button>
+                    <button class="prompt-chip" onclick="sendQuickPrompt('I have an emergency tooth pain! What is the hotline?')">
+                        <i class="fa-solid fa-phone-flip"></i> Emergency Support
+                    </button>
+                    <button class="prompt-chip" onclick="sendQuickPrompt('Book an appointment for me. My email is alex@example.com and phone +1 555-0192')">
+                        <i class="fa-solid fa-address-card"></i> Book & Capture Lead
+                    </button>
+                </div>
+
+                <!-- Chat Input Box -->
+                <form class="chat-input-form" id="chat-form" onsubmit="handleSendMessage(event)">
+                    <input type="text" id="chat-input" placeholder="Type your question or contact details..." autocomplete="off" required>
+                    <button type="submit" id="send-btn">
+                        <span>Send</span> <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Right Side: Interactive Admin Dashboard & Stats -->
+        <section class="dashboard-section">
+            
+            <!-- Dashboard Navigation Tabs -->
+            <div class="tabs-nav">
+                <button class="tab-btn active" onclick="switchTab('tab-leads')">
+                    <i class="fa-solid fa-users"></i> Captured Leads <span class="badge" id="leads-count-badge">0</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-kb')">
+                    <i class="fa-solid fa-database"></i> Knowledge Base
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-api')">
+                    <i class="fa-solid fa-code"></i> API Tester
+                </button>
+            </div>
+
+            <!-- Tab 1: Captured Sales Leads Table -->
+            <div class="tab-content active" id="tab-leads">
+                <div class="card panel-card">
+                    <div class="panel-header">
+                        <div>
+                            <h4><i class="fa-solid fa-user-plus text-accent"></i> Real-Time Sales Leads</h4>
+                            <p class="panel-desc">Contact info automatically detected by AI in user conversations.</p>
+                        </div>
+                        <button class="btn-sm btn-outline" onclick="fetchLeads()">
+                            <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                        </button>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table class="leads-table">
+                            <thead>
+                                <tr>
+                                    <th>Channel</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                    <th>Intent</th>
+                                    <th>Captured Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leads-table-body">
+                                <tr>
+                                    <td colspan="5" class="empty-table">
+                                        <i class="fa-solid fa-inbox"></i> No leads captured yet. Send an email or phone number in chat to capture one!
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 2: Business Knowledge Base Document Viewer -->
+            <div class="tab-content" id="tab-kb">
+                <div class="card panel-card">
+                    <div class="panel-header">
+                        <div>
+                            <h4><i class="fa-solid fa-book-bookmark text-accent"></i> Vector Knowledge Base (ChromaDB)</h4>
+                            <p class="panel-desc">Grounded facts used by the RAG Engine to answer questions truthful and accurately.</p>
+                        </div>
+                    </div>
+
+                    <div class="kb-preview">
+                        <div class="kb-doc-card">
+                            <div class="kb-doc-header">
+                                <i class="fa-solid fa-file-lines"></i>
+                                <span>dental_clinic_faq.txt</span>
+                                <span class="badge-tag">Pre-Seeded</span>
+                            </div>
+                            <pre class="kb-doc-body">
+Apex Dental Clinic FAQ:
+1. Business Hours: Open Mon-Fri 9:00 AM - 6:00 PM, Sat 10:00 AM - 3:00 PM. Closed Sundays.
+2. Location: 123 Healthcare Ave, Suite 400, Downtown City.
+3. Emergency Support: Hotline +1 (555) 987-6543 for urgent tooth pain.
+4. Services & Pricing: Teeth Whitening ($199), Cleaning ($99), Implants (From $1,200), Root Canal ($450).
+5. Appointments: Book by providing date, name, and email.
+                            </pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 3: Developer API Tester & cURL Generator -->
+            <div class="tab-content" id="tab-api">
+                <div class="card panel-card">
+                    <div class="panel-header">
+                        <div>
+                            <h4><i class="fa-solid fa-terminal text-accent"></i> Developer API Integration</h4>
+                            <p class="panel-desc">Copy-paste ready cURL command to send requests programmatically.</p>
+                        </div>
+                    </div>
+
+                    <div class="code-block-wrapper">
+                        <div class="code-header">
+                            <span>cURL Request</span>
+                            <button class="btn-copy" onclick="copyCurl()"><i class="fa-regular fa-copy"></i> Copy</button>
+                        </div>
+                        <pre class="code-body" id="curl-snippet">
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "What are your business hours?",
+    "session_id": "session_demo",
+    "channel": "whatsapp"
+  }'
+                        </pre>
+                    </div>
+
+                    <div class="api-links">
+                        <a href="/docs" target="_blank" class="btn-link">
+                            <i class="fa-solid fa-up-right-from-square"></i> Open FastAPI Interactive Swagger UI (/docs)
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>WhatsApp & Telegram AI Support Bot • Production RAG Starter Kit • Powered by FastAPI & LangChain</p>
+    </footer>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
