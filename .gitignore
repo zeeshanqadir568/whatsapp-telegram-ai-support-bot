@@ -28,3 +28,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local backups & uploaded client knowledge bases
+*.backup
+uploads/
