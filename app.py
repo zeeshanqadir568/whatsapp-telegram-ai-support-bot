@@ -65,10 +65,14 @@ def startup_event():
     logger.info("Initializing database tables...")
     init_db()
 
-    # Pre-seed default business knowledge base if ChromaDB collection is currently empty
+    # Pre-seed the built-in demo knowledge base when the vector store is empty.
+    # This is sample data for the public repo demo, not any real business.
+    # Set SEED_DEMO_KB=false before ingesting a real client's content, and delete
+    # data/chroma first -- otherwise both sets are retrieved and answers conflict.
     try:
+        seed_enabled = os.getenv("SEED_DEMO_KB", "true").lower() == "true"
         count = rag_engine.vector_manager.get_document_count()
-        if count == 0:
+        if count == 0 and seed_enabled:
             logger.info("Vector store is empty. Seeding initial dental clinic FAQ knowledge base...")
             sample_kb = (
                 "Apex Dental Clinic FAQ:\n"

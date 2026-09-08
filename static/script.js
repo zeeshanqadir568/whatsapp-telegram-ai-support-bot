@@ -87,6 +87,13 @@ async function handleSendMessage(event) {
 
     const channel = document.getElementById("channel-select").value;
 
+    // Lock the input while a reply is in flight. Without this, a slow model
+    // lets the user resend the same question several times before the first
+    // reply lands, and every copy is answered.
+    const sendButton = document.querySelector("#chat-form button[type=submit]");
+    input.disabled = true;
+    if (sendButton) sendButton.disabled = true;
+
     // Append User Message to UI
     appendUserMessage(message);
     input.value = "";
@@ -125,6 +132,10 @@ async function handleSendMessage(event) {
         removeMessageElement(typingId);
         appendAssistantMessage("Network error: Could not reach the AI support API server.");
         console.error("Chat error:", error);
+    } finally {
+        input.disabled = false;
+        if (sendButton) sendButton.disabled = false;
+        input.focus();
     }
 }
 
