@@ -4,6 +4,12 @@ A production-ready, retrieval-augmented customer support assistant built with **
 
 This bot automatically answers customer queries using your custom business knowledge base (FAQs, pricing, policy docs) while automatically capturing contact leads into a database. It integrates directly with **WhatsApp**, **Telegram**, and includes an interactive **Web Dashboard**.
 
+## Demo
+
+Booking an appointment through chat, with the assistant extracting contact details and saving a lead to the database in real time:
+
+<video src="https://raw.githubusercontent.com/zeeshanqadir568/whatsapp-telegram-ai-support-bot/main/docs/demo.mp4" controls width="700"></video>
+
 ## Screenshots
 
 | Chat simulator | Live grounded answer | Knowledge base |
