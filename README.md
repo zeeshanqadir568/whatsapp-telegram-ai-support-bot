@@ -4,6 +4,14 @@ A production-ready, retrieval-augmented customer support assistant built with **
 
 This bot automatically answers customer queries using your custom business knowledge base (FAQs, pricing, policy docs) while automatically capturing contact leads into a database. It integrates directly with **WhatsApp**, **Telegram**, and includes an interactive **Web Dashboard**.
 
+## Screenshots
+
+| Chat simulator | Live grounded answer | Knowledge base |
+|---|---|---|
+| ![Chat simulator](docs/screenshots/whatsapp-bot-1-chat.png) | ![Live answer](docs/screenshots/whatsapp-bot-2-live-answer.png) | ![Knowledge base](docs/screenshots/whatsapp-bot-3-knowledge-base.png) |
+
+The middle screenshot is a real response from the local Ollama fallback, answering strictly from the seeded knowledge base and citing its source document.
+
 ---
 
 ## 📌 Table of Contents
