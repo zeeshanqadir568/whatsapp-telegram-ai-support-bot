@@ -6,9 +6,11 @@ This bot automatically answers customer queries using your custom business knowl
 
 ## Demo
 
-Booking an appointment through chat, with the assistant extracting contact details and saving a lead to the database in real time:
+Answering pricing/hours questions, then booking an appointment through chat, with the assistant extracting contact details and saving a lead to the database in real time:
 
-<video src="https://raw.githubusercontent.com/zeeshanqadir568/whatsapp-telegram-ai-support-bot/main/docs/demo.mp4" controls width="700"></video>
+![Demo](docs/demo.gif)
+
+[Full-length video (with audio, ~3 min)](docs/demo.mp4) — click through, then "View raw" or download to watch.
 
 ## Screenshots
 
