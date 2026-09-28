@@ -292,10 +292,10 @@ Receives Telegram Bot API update objects. The bot processes the message through 
 
 **Setup:**
 1. Create a bot via [@BotFather](https://t.me/BotFather)
-2. Add `TELEGRAM_BOT_TOKEN=your_token_here` to `.env`
-3. Set your webhook URL with Telegram:
+2. Add `TELEGRAM_BOT_TOKEN=your_token_here` and a random `TELEGRAM_WEBHOOK_SECRET` to `.env`
+3. Set your webhook URL with Telegram, passing the same secret (requests without it are rejected with 403):
 ```bash
-curl https://api.telegram.org/bot<YOUR_TOKEN>/setWebhook?url=https://your-domain.com/webhook/telegram
+curl "https://api.telegram.org/bot<YOUR_TOKEN>/setWebhook?url=https://your-domain.com/webhook/telegram&secret_token=<YOUR_WEBHOOK_SECRET>"
 ```
 
 ---
@@ -312,10 +312,25 @@ Handles Meta Cloud API webhook verification and incoming WhatsApp messages.
 2. Add the following to `.env`:
 ```env
 WHATSAPP_VERIFY_TOKEN=your_verify_token
+WHATSAPP_APP_SECRET=your_meta_app_secret   # verifies X-Hub-Signature-256 on every webhook
 WHATSAPP_ACCESS_TOKEN=your_access_token
 WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
 ```
 3. Set your webhook URL in the Meta Developer Console to `https://your-domain.com/webhook/whatsapp`
+
+---
+
+## 🔒 Running on a Public URL
+
+The app is safe to expose publicly with its defaults:
+
+- **Leads and uploads are admin-only.** `/api/leads` and `/api/upload` need an `X-Admin-Token` header matching `ADMIN_TOKEN`. With `ADMIN_TOKEN` unset they are disabled, so visitors never see each other's contact details.
+- **Chat is rate limited.** `CHAT_RATE_PER_MINUTE` (default 10) per visitor IP, plus a global `CHAT_DAILY_CAP` (default 500) so a public demo cannot run up the LLM bill. Messages are capped at 1,000 characters.
+- **Uploads are sanitized.** Filenames are reduced to their base name (no `../` path traversal) and files are limited to 5 MB.
+- **Webhooks fail closed.** Telegram requests must carry `TELEGRAM_WEBHOOK_SECRET`; WhatsApp requests must carry a valid Meta `X-Hub-Signature-256` for `WHATSAPP_APP_SECRET`.
+- **The Docker image runs as a non-root user** and `.dockerignore` keeps `.env` and local data out of it.
+
+Also set a monthly spend limit on your Anthropic API key.
 
 ---
 
@@ -339,6 +354,7 @@ python eval_retrieval.py
 ```
 ├── app.py                  # FastAPI routes, webhooks, upload endpoint & startup seeding
 ├── rag_engine.py           # RAG core, ChromaDB manager, LLM fallback & lead extraction
+├── security.py             # Admin token, chat rate limits, webhook signature checks
 ├── database.py             # SQLAlchemy engine & session setup
 ├── models.py               # Database models (Conversation, Lead)
 ├── eval_retrieval.py       # Retrieval benchmark suite
@@ -354,7 +370,8 @@ python eval_retrieval.py
     ├── __init__.py
     ├── conftest.py          # Isolated temp DB/vector store, no paid API calls
     ├── test_app.py          # API endpoint tests
-    └── test_rag_engine.py   # RAG engine tests
+    ├── test_rag_engine.py   # RAG engine tests
+    └── test_security.py     # Public-deployment guards
 ```
 
 ---
@@ -384,6 +401,11 @@ python eval_retrieval.py
 | `OLLAMA_MODEL` | Ollama model name (default: `qwen2.5:7b`) | No |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token from BotFather | For Telegram integration |
 | `WHATSAPP_VERIFY_TOKEN` | Meta webhook verification token | For WhatsApp integration |
+| `WHATSAPP_APP_SECRET` | Meta app secret, verifies webhook signatures | For WhatsApp integration |
+| `TELEGRAM_WEBHOOK_SECRET` | Secret passed to Telegram `setWebhook` | For Telegram integration |
+| `ADMIN_TOKEN` | Unlocks `/api/leads` and `/api/upload`; unset = disabled | No |
+| `CHAT_RATE_PER_MINUTE` / `CHAT_DAILY_CAP` | Chat limits per IP per minute / per day overall (default 10 / 500) | No |
+| `TRUSTED_PROXY_HOPS` | Reverse proxies in front of the app (default 1) | No |
 | `WHATSAPP_ACCESS_TOKEN` | Meta Cloud API access token | For WhatsApp integration |
 | `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp Business phone number ID | For WhatsApp integration |
 | `CHROMA_PERSIST_DIR` | ChromaDB storage path (default: `./data/chroma`) | No |

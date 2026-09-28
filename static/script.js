@@ -38,6 +38,18 @@ async function fetchHealthStatus() {
 async function fetchLeads() {
     try {
         const response = await fetch("/api/leads");
+        if (response.status === 401 || response.status === 403) {
+            // Leads hold visitors' contact details, so they are admin-only on public deployments
+            document.getElementById("leads-count-badge").innerText = "🔒";
+            document.getElementById("leads-table-body").innerHTML = `
+                <tr>
+                    <td colspan="5" class="empty-table">
+                        <i class="fa-solid fa-lock"></i> Leads are private on this public demo. The chat still detects and saves them.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
         if (!response.ok) return;
         const leads = await response.json();
 
@@ -115,8 +127,11 @@ async function handleSendMessage(event) {
         removeMessageElement(typingId);
 
         if (!response.ok) {
-            const errData = await response.json();
-            appendAssistantMessage("Error: " + (errData.detail || "Failed to process message"));
+            const errData = await response.json().catch(() => ({}));
+            const detail = response.status === 422
+                ? "Message is too long (max 1000 characters)."
+                : (typeof errData.detail === "string" ? errData.detail : "Failed to process message");
+            appendAssistantMessage(detail);
             return;
         }
 
@@ -234,9 +249,11 @@ async function handleUploadDocument(event) {
         });
 
         if (!response.ok) {
-            const errData = await response.json();
+            const errData = await response.json().catch(() => ({}));
             statusMsg.style.color = "#f87171";
-            statusMsg.innerText = "Upload failed: " + (errData.detail || "Error uploading file");
+            statusMsg.innerText = (response.status === 401 || response.status === 403)
+                ? "Uploads are disabled on this public demo (admin only)."
+                : "Upload failed: " + (errData.detail || "Error uploading file");
             return;
         }
 

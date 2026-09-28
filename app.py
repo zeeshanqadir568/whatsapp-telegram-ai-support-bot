@@ -4,7 +4,7 @@
 import os
 import logging
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, Query, Request, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -12,6 +12,9 @@ from sqlalchemy.orm import Session
 from database import get_db, init_db
 import models
 from rag_engine import RAGEngine
+from security import chat_limiter, client_ip, require_admin, verify_telegram, verify_whatsapp
+
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -39,9 +42,9 @@ rag_engine = RAGEngine()
 
 # Pydantic Schemas
 class ChatRequest(BaseModel):
-    message: str = Field(..., description="User message content", min_length=1)
-    session_id: str = Field(..., description="Unique session identifier for history tracking")
-    channel: str = Field("api", description="Messaging channel: whatsapp, telegram, or api")
+    message: str = Field(..., description="User message content", min_length=1, max_length=1000)
+    session_id: str = Field(..., description="Unique session identifier for history tracking", max_length=100)
+    channel: str = Field("api", description="Messaging channel: whatsapp, telegram, or api", max_length=20)
 
 
 class ChatResponse(BaseModel):
@@ -109,12 +112,13 @@ def health_check(db: Session = Depends(get_db)):
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
+def chat_endpoint(request: ChatRequest, http_request: Request, db: Session = Depends(get_db)):
     """Core RAG-grounded support chat endpoint.
 
     Receives user message, fetches session history from SQLite, generates RAG reply,
     logs messages to database, and captures lead contact info if detected.
     """
+    chat_limiter.check(client_ip(http_request))
     try:
         # 1. Retrieve most recent conversation history for this session
         history_records = (
@@ -186,11 +190,11 @@ def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while processing your message: {str(err)}"
+            detail="An error occurred while processing your message."
         )
 
 
-@app.get("/api/leads")
+@app.get("/api/leads", dependencies=[Depends(require_admin)])
 def get_leads(db: Session = Depends(get_db)):
     """API endpoint retrieving captured sales leads from SQLite database."""
     try:
@@ -214,11 +218,13 @@ def get_leads(db: Session = Depends(get_db)):
         return []
 
 
-@app.post("/api/upload")
+@app.post("/api/upload", dependencies=[Depends(require_admin)])
 async def upload_document(file: UploadFile = File(...)):
     """API endpoint allowing clients to upload custom PDF, TXT, or MD knowledge base files."""
     try:
-        ext = os.path.splitext(file.filename)[1].lower()
+        # Never trust the client's filename: keep only the base name (blocks ../ path traversal)
+        filename = os.path.basename((file.filename or "").replace("\\", "/"))
+        ext = os.path.splitext(filename)[1].lower()
         if ext not in [".pdf", ".txt", ".md"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -228,9 +234,15 @@ async def upload_document(file: UploadFile = File(...)):
         upload_dir = os.path.join(os.path.dirname(__file__), "uploads")
         os.makedirs(upload_dir, exist_ok=True)
 
-        save_path = os.path.join(upload_dir, file.filename)
+        content = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="File is larger than 5 MB."
+            )
+
+        save_path = os.path.join(upload_dir, filename)
         with open(save_path, "wb") as buffer:
-            content = await file.read()
             buffer.write(content)
 
         chunks_added = rag_engine.ingest_file(save_path)
@@ -238,20 +250,22 @@ async def upload_document(file: UploadFile = File(...)):
 
         return {
             "status": "success",
-            "filename": file.filename,
+            "filename": filename,
             "chunks_added": chunks_added,
             "total_vector_documents": total_docs,
-            "message": f"Successfully ingested '{file.filename}' into ChromaDB knowledge base."
+            "message": f"Successfully ingested '{filename}' into ChromaDB knowledge base."
         }
+    except HTTPException:
+        raise
     except Exception as err:
         logger.error(f"Error uploading document: {err}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to ingest document: {str(err)}"
+            detail="Failed to ingest document."
         )
 
 
-@app.post("/webhook/telegram")
+@app.post("/webhook/telegram", dependencies=[Depends(verify_telegram)])
 async def telegram_webhook(update: dict, db: Session = Depends(get_db)):
     """Webhook receiver for Telegram Bot API integration."""
     try:
@@ -306,18 +320,18 @@ async def telegram_webhook(update: dict, db: Session = Depends(get_db)):
 
 @app.get("/webhook/whatsapp")
 def verify_whatsapp_webhook(
-    hub_mode: Optional[str] = None,
-    hub_verify_token: Optional[str] = None,
-    hub_challenge: Optional[str] = None
+    hub_mode: Optional[str] = Query(None, alias="hub.mode"),
+    hub_verify_token: Optional[str] = Query(None, alias="hub.verify_token"),
+    hub_challenge: Optional[str] = Query(None, alias="hub.challenge")
 ):
     """Meta WhatsApp Cloud API webhook verification handler."""
-    verify_token = os.getenv("WHATSAPP_VERIFY_TOKEN", "my_verify_token")
-    if hub_mode == "subscribe" and hub_verify_token == verify_token:
+    verify_token = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
+    if verify_token and hub_mode == "subscribe" and hub_verify_token == verify_token:
         return int(hub_challenge) if hub_challenge and hub_challenge.isdigit() else hub_challenge
     raise HTTPException(status_code=403, detail="Verification token mismatch")
 
 
-@app.post("/webhook/whatsapp")
+@app.post("/webhook/whatsapp", dependencies=[Depends(verify_whatsapp)])
 async def whatsapp_webhook(payload: dict, db: Session = Depends(get_db)):
     """Meta WhatsApp Cloud API & Twilio webhook incoming message receiver."""
     try:
