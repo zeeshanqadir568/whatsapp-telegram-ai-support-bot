@@ -7,10 +7,14 @@ from fastapi.testclient import TestClient
 from app import app
 
 
-client = TestClient(app)
+@pytest.fixture(scope="module")
+def client():
+    """Context-managed client so the startup hook creates tables and seeds the KB."""
+    with TestClient(app) as c:
+        yield c
 
 
-def test_health_endpoint():
+def test_health_endpoint(client):
     """Tests GET /health endpoint returns 200 OK and expected structure."""
     response = client.get("/health")
     assert response.status_code == 200
@@ -21,7 +25,7 @@ def test_health_endpoint():
     assert data["database_status"] == "healthy"
 
 
-def test_chat_endpoint_grounded_response():
+def test_chat_endpoint_grounded_response(client):
     """Tests POST /chat endpoint with a sample inquiry."""
     payload = {
         "message": "What are your business hours?",
@@ -37,7 +41,7 @@ def test_chat_endpoint_grounded_response():
     assert isinstance(data["sources"], list)
 
 
-def test_chat_endpoint_lead_capture():
+def test_chat_endpoint_lead_capture(client):
     """Tests POST /chat endpoint detects contact lead details."""
     payload = {
         "message": "Can I book an appointment? My email is testuser@example.com",

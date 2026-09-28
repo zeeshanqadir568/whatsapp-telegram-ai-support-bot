@@ -1,5 +1,7 @@
 # 🤖 WhatsApp & Telegram AI Support Bot (RAG Starter Kit)
 
+[![CI](https://github.com/zeeshanqadir568/whatsapp-telegram-ai-support-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/zeeshanqadir568/whatsapp-telegram-ai-support-bot/actions/workflows/ci.yml)
+
 A production-ready, retrieval-augmented customer support assistant built with **FastAPI**, **LangChain**, **ChromaDB**, and **Docker**.
 
 This bot automatically answers customer queries using your custom business knowledge base (FAQs, pricing, policy docs) while automatically capturing contact leads into a database. It integrates directly with **WhatsApp**, **Telegram**, and includes an interactive **Web Dashboard**.
@@ -344,13 +346,13 @@ python eval_retrieval.py
 ├── Dockerfile              # Production Docker image configuration
 ├── docker-compose.yml      # Docker Compose setup
 ├── .env.example            # Environment variables template
-├── SESSION_LOG.md          # Development audit log
 ├── static/                 # Web Dashboard frontend
 │   ├── index.html          # Dashboard HTML (chat, leads, knowledge base tabs)
 │   ├── script.js           # Frontend logic (API calls, chat, upload)
 │   └── style.css           # Dashboard styling (dark theme, responsive)
 └── tests/                  # Unit test suite
     ├── __init__.py
+    ├── conftest.py          # Isolated temp DB/vector store, no paid API calls
     ├── test_app.py          # API endpoint tests
     └── test_rag_engine.py   # RAG engine tests
 ```
