@@ -228,16 +228,17 @@ Submits a user query, searches the knowledge base, generates an AI response, and
 ```json
 {
   "message": "What are your business hours? My email is user@example.com",
-  "session_id": "session_123",
   "channel": "whatsapp"
 }
 ```
+
+Omit `session_id` on the first message. The server issues one (a UUID) in the reply; send it back on later messages to keep the conversation history. Any other value is replaced with a new ID, so a caller cannot read another visitor's or a WhatsApp/Telegram customer's history.
 
 **Response:**
 ```json
 {
   "reply": "We are open Monday to Friday 9:00 AM - 6:00 PM, Saturday 10:00 AM - 3:00 PM.",
-  "session_id": "session_123",
+  "session_id": "6f1c2a9e-3b7d-4c55-9a43-2d8e1f0b7c11",
   "channel": "whatsapp",
   "sources": ["dental_clinic_faq.txt"],
   "lead_captured": true
@@ -408,7 +409,7 @@ python eval_retrieval.py
 | `TELEGRAM_WEBHOOK_SECRET` | Secret passed to Telegram `setWebhook` | For Telegram integration |
 | `ADMIN_TOKEN` | Unlocks `/api/leads` and `/api/upload`; unset = disabled | No |
 | `CHAT_RATE_PER_MINUTE` / `CHAT_DAILY_CAP` | Chat limits per IP per minute / per day overall (default 10 / 500) | No |
-| `TRUSTED_PROXY_HOPS` | Reverse proxies in front of the app (default 1) | No |
+| `TRUSTED_PROXY_HOPS` | Reverse proxies in front of the app (default 0; set 1 on Hugging Face Spaces / Render) | No |
 | `WHATSAPP_ACCESS_TOKEN` | Meta Cloud API access token | For WhatsApp integration |
 | `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp Business phone number ID | For WhatsApp integration |
 | `CHROMA_PERSIST_DIR` | ChromaDB storage path (default: `./data/chroma`) | No |

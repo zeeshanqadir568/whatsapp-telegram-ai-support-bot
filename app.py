@@ -3,6 +3,7 @@
 
 import os
 import logging
+import uuid
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, Query, Request, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,7 +44,7 @@ rag_engine = RAGEngine()
 # Pydantic Schemas
 class ChatRequest(BaseModel):
     message: str = Field(..., description="User message content", min_length=1, max_length=1000)
-    session_id: str = Field(..., description="Unique session identifier for history tracking", max_length=100)
+    session_id: Optional[str] = Field(None, description="Session ID returned by a previous /chat reply; omit to start a new session", max_length=100)
     channel: str = Field("api", description="Messaging channel: whatsapp, telegram, or api", max_length=20)
 
 
@@ -111,6 +112,20 @@ def health_check(db: Session = Depends(get_db)):
     )
 
 
+def resolve_web_session(raw: Optional[str]) -> str:
+    """Return the caller's web session ID, or issue a new one.
+
+    Only server-issued UUID4s are accepted, so a caller cannot pick a guessable ID or
+    reuse a WhatsApp phone number / Telegram chat ID to read someone else's history.
+    """
+    try:
+        if raw and uuid.UUID(raw).version == 4:
+            return str(uuid.UUID(raw))
+    except ValueError:
+        pass
+    return str(uuid.uuid4())
+
+
 @app.post("/chat", response_model=ChatResponse)
 def chat_endpoint(request: ChatRequest, http_request: Request, db: Session = Depends(get_db)):
     """Core RAG-grounded support chat endpoint.
@@ -119,11 +134,15 @@ def chat_endpoint(request: ChatRequest, http_request: Request, db: Session = Dep
     logs messages to database, and captures lead contact info if detected.
     """
     chat_limiter.check(client_ip(http_request))
+    session_id = resolve_web_session(request.session_id)
+    # Web sessions are stored under their own namespace so they can never address
+    # webhook sessions (which are keyed by phone number / chat ID).
+    history_key = f"web:{session_id}"
     try:
         # 1. Retrieve most recent conversation history for this session
         history_records = (
             db.query(models.Conversation)
-            .filter(models.Conversation.session_id == request.session_id)
+            .filter(models.Conversation.session_id == history_key)
             .order_by(models.Conversation.timestamp.desc())
             .limit(10)
             .all()
@@ -137,7 +156,7 @@ def chat_endpoint(request: ChatRequest, http_request: Request, db: Session = Dep
 
         # 2. Save incoming user message
         user_msg = models.Conversation(
-            session_id=request.session_id,
+            session_id=history_key,
             channel=request.channel,
             role="user",
             content=request.message
@@ -154,7 +173,7 @@ def chat_endpoint(request: ChatRequest, http_request: Request, db: Session = Dep
 
         # 4. Save assistant response
         assistant_msg = models.Conversation(
-            session_id=request.session_id,
+            session_id=history_key,
             channel=request.channel,
             role="assistant",
             content=reply_text
@@ -165,7 +184,7 @@ def chat_endpoint(request: ChatRequest, http_request: Request, db: Session = Dep
         lead_captured = False
         if lead_info.get("has_lead"):
             lead = models.Lead(
-                session_id=request.session_id,
+                session_id=history_key,
                 channel=request.channel,
                 email=lead_info.get("email"),
                 phone=lead_info.get("phone"),
@@ -180,7 +199,7 @@ def chat_endpoint(request: ChatRequest, http_request: Request, db: Session = Dep
 
         return ChatResponse(
             reply=reply_text,
-            session_id=request.session_id,
+            session_id=session_id,
             channel=request.channel,
             sources=sources,
             lead_captured=lead_captured

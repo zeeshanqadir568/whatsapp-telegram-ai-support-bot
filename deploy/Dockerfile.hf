@@ -17,6 +17,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     LLM_PROVIDER=ollama \
     OLLAMA_BASE_URL=http://127.0.0.1:11434 \
     OLLAMA_MODEL=qwen3:1.7b \
+    TRUSTED_PROXY_HOPS=1 \
     PORT=8000
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \

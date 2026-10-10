@@ -36,7 +36,8 @@ def test_chat_endpoint_grounded_response(client):
     assert response.status_code == 200
     data = response.json()
     assert "reply" in data
-    assert data["session_id"] == "test_session_123"
+    # A non-UUID session_id is replaced by a server-issued one
+    assert data["session_id"] != "test_session_123"
     assert data["channel"] == "api"
     assert isinstance(data["sources"], list)
 
@@ -52,3 +53,34 @@ def test_chat_endpoint_lead_capture(client):
     assert response.status_code == 200
     data = response.json()
     assert data["lead_captured"] is True
+
+
+def test_web_chat_cannot_read_a_whatsapp_session(client, monkeypatch):
+    """Audit finding #1: a web caller reusing a WhatsApp phone number as session_id got that customer's history."""
+    import uuid
+    import app as app_module
+    import models
+    from database import SessionLocal
+
+    phone = "923001112233"
+    db = SessionLocal()
+    db.add(models.Conversation(session_id=phone, channel="whatsapp", role="user", content="I am Sana, sana.k@example.com"))
+    db.commit()
+    db.close()
+
+    seen = []
+
+    def fake_answer(query, chat_history=None, top_k=3):
+        seen.append(chat_history)
+        return "ok", [], {"has_lead": False}
+
+    monkeypatch.setattr(app_module.rag_engine, "answer_query", fake_answer)
+
+    first = client.post("/chat", json={"message": "What is my email?", "session_id": phone, "channel": "api"}).json()
+    assert first["session_id"] != phone
+    assert uuid.UUID(first["session_id"]).version == 4
+    assert seen[0] == []
+
+    # The server-issued ID carries the caller's own history, and nothing else
+    client.post("/chat", json={"message": "second", "session_id": first["session_id"], "channel": "api"})
+    assert [m["content"] for m in seen[1]] == ["What is my email?", "ok"]

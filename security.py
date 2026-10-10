@@ -34,8 +34,10 @@ def client_ip(request: Request) -> str:
     X-Forwarded-For by the proxy, so read it from the right: the left-most
     entries are client-controlled and trivially spoofed. TRUSTED_PROXY_HOPS is
     how many proxies sit in front of the app (0 = use the socket address).
+    The default is 0: trusting the header with no proxy in front lets any caller
+    pick their own rate-limit key.
     """
-    hops = int(os.getenv("TRUSTED_PROXY_HOPS", "1"))
+    hops = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))
     forwarded = [ip.strip() for ip in request.headers.get("x-forwarded-for", "").split(",") if ip.strip()]
     if hops > 0 and len(forwarded) >= hops:
         return forwarded[-hops]

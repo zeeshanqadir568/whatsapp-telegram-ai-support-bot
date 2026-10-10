@@ -1,5 +1,6 @@
 // State management
-let currentSessionId = "session_" + Math.floor(Math.random() * 100000);
+// Issued by the server on the first reply; never generated here.
+let currentSessionId = null;
 
 // Initialize on page load
 document.addEventListener("DOMContentLoaded", () => {
@@ -136,6 +137,7 @@ async function handleSendMessage(event) {
         }
 
         const data = await response.json();
+        currentSessionId = data.session_id;
         appendAssistantMessage(data.reply, data.sources, data.lead_captured);
 
         // If lead was captured, refresh leads table

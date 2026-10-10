@@ -115,6 +115,13 @@ def test_client_ip_ignores_spoofed_left_entries(monkeypatch):
     assert client_ip(_FakeRequest("6.6.6.6, 203.0.113.7")) == "203.0.113.7"
 
 
+def test_client_ip_ignores_forwarded_header_by_default(monkeypatch):
+    """Audit finding #6: with no proxy, a rotating X-Forwarded-For bypassed the rate limit."""
+    monkeypatch.delenv("TRUSTED_PROXY_HOPS", raising=False)
+    assert client_ip(_FakeRequest("198.51.100.20")) == "10.0.0.1"
+    assert client_ip(_FakeRequest("198.51.100.21")) == "10.0.0.1"
+
+
 def test_client_ip_falls_back_to_socket(monkeypatch):
     monkeypatch.setenv("TRUSTED_PROXY_HOPS", "0")
     assert client_ip(_FakeRequest("6.6.6.6")) == "10.0.0.1"
