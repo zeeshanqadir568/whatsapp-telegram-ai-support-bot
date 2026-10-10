@@ -209,18 +209,31 @@ class LLMProvider:
         try:
             import httpx
 
-            url = f"{self.ollama_base_url.rstrip('/')}/api/generate"
-            full_prompt = f"System: {system_prompt}\n\nUser: {user_prompt}\nAssistant:"
+            url = f"{self.ollama_base_url.rstrip('/')}/api/chat"
+            think = os.getenv("OLLAMA_THINK", "false").lower() == "true"
             payload = {
                 "model": self.ollama_model,
-                "prompt": full_prompt,
-                "stream": False
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "stream": False,
+                # Reasoning models (qwen3, deepseek-r1): thinking roughly doubles latency
+                # but follows the grounding rules more reliably (6/6 vs 5/6 in our eval).
+                # Thinking tokens count toward num_predict, so give it more room.
+                "think": think,
+                "options": {
+                    "temperature": 0.1,
+                    "num_predict": int(os.getenv("OLLAMA_MAX_TOKENS", "1024" if think else "300")),
+                },
             }
-            with httpx.Client(timeout=30.0) as client:
+            timeout = float(os.getenv("OLLAMA_TIMEOUT", "120"))
+            with httpx.Client(timeout=timeout) as client:
                 response = client.post(url, json=payload)
                 if response.status_code == 200:
-                    data = response.json()
-                    return data.get("response", "")
+                    content = response.json().get("message", {}).get("content", "")
+                    # Belt and braces: drop any <think> block a model emits anyway
+                    return re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
                 else:
                     logger.error(f"Ollama HTTP error {response.status_code}: {response.text}")
                     return (
@@ -234,6 +247,9 @@ class LLMProvider:
                 "Thank you for contacting customer support. "
                 "(Note: AI LLM service is offline; system operating in dry-run mode)."
             )
+
+
+DEVANAGARI = re.compile(r"[ऀ-ॿ]")
 
 
 class RAGEngine:
@@ -303,17 +319,47 @@ class RAGEngine:
 
         # 3. System Prompt construction
         system_prompt = (
-            "You are a helpful, professional AI Customer Support Assistant for a business. "
-            "Use the provided Knowledge Base Context below to accurately answer the user's inquiry. "
-            "If the context does not contain enough information to answer, politely state what you know "
-            "and offer to connect them with a human team member. Be concise, friendly, and helpful.\n\n"
-            f"KNOWLEDGE BASE CONTEXT:\n{context_str}\n"
+            "You are the customer support assistant for the business described in the KNOWLEDGE BASE below.\n"
+            "Rules:\n"
+            "1. Answer ONLY with facts stated in the KNOWLEDGE BASE. Never use outside knowledge.\n"
+            "2. If the answer is not in the KNOWLEDGE BASE, say you don't have that information and offer "
+            "to connect them with the team. Do NOT guess, and do NOT claim the business does or does not "
+            "offer something that the KNOWLEDGE BASE does not mention.\n"
+            "3. Never promise actions the KNOWLEDGE BASE does not describe (for example confirmation emails, "
+            "discounts or call-backs). For bookings, collect what the KNOWLEDGE BASE asks for and say the "
+            "team will follow up.\n"
+            "4. Be concise (2-4 sentences), friendly and professional. Reply in the user's language.\n"
+            "5. If the user writes Roman Urdu (Urdu in English letters, e.g. 'Aap kab khulay hain?'), reply in "
+            "Roman Urdu with Urdu words, written in English letters. Never use Hindi or Devanagari script.\n\n"
+            # Few-shot examples lifted rule-following from 3/6 to 5/6 on qwen3:8b in our eval
+            "Examples of correct behaviour (for a different business):\n"
+            "User: Do you sell gift cards?\n"
+            "Assistant: I don't have information about gift cards. I can connect you with our team to check for you.\n"
+            "User: Book me Tuesday, I'm Sara, sara@mail.com\n"
+            "Assistant: Thanks Sara! I've noted Tuesday and your email. Our team will contact you to confirm the appointment.\n"
+            "User: Kya aap delivery karte hain?\n"
+            "Assistant: Mere paas delivery ke baare mein maloomat nahi hai. Main aap ko hamari team se connect kar sakta hoon.\n\n"
+            f"KNOWLEDGE BASE:\n{context_str}\n"
         )
 
         user_prompt = f"Recent Chat History:\n{history_str}\nUser Question: {query}"
 
         # 4. Generate LLM reply
         response_text = self.llm_provider.generate_response(system_prompt, user_prompt)
+
+        # Small models sometimes answer Roman Urdu in Hindi (Devanagari) script, which
+        # Pakistani customers cannot read. Ask once more, then fall back to a safe reply.
+        if DEVANAGARI.search(response_text):
+            response_text = self.llm_provider.generate_response(
+                system_prompt + "\nIMPORTANT: Write your reply using English letters only "
+                "(Roman Urdu or English). Do not use Devanagari script.",
+                user_prompt,
+            )
+            if DEVANAGARI.search(response_text):
+                response_text = (
+                    "Sorry, I couldn't answer that properly. Please rephrase your question, "
+                    "or share your contact details and our team will help you."
+                )
 
         # 5. Extract potential lead details (regex heuristics)
         extracted_lead = self._extract_lead_heuristics(query)
@@ -323,15 +369,18 @@ class RAGEngine:
     def _extract_lead_heuristics(self, text: str) -> Dict[str, Any]:
         """Simple pattern extraction for phone, email, and name intent."""
         email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-        phone_pattern = r'(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
+        phone_pattern = r'\+?\d[\d\s().-]{8,17}\d'
 
         emails = re.findall(email_pattern, text)
-        phones = re.findall(phone_pattern, text)
 
+        # Take the whole match (findall would return only the capture group) and
+        # accept 10-15 digits, which covers US (+1 555 123 4567) and PK (0300 1234567).
         phone_val = None
-        if phones:
-            p = phones[0]
-            phone_val = p if isinstance(p, str) else "".join(p)
+        for match in re.finditer(phone_pattern, text):
+            digits = re.sub(r"\D", "", match.group(0))
+            if 10 <= len(digits) <= 15:
+                phone_val = match.group(0).strip()
+                break
 
         lead_data = {
             "has_lead": False,

@@ -1,0 +1,33 @@
+# Public demo on your own machine, using the host's Ollama.
+#
+#   docker compose -f deploy/docker-compose.demo.yml up -d --build
+#
+# Then expose http://localhost:8765 with a tunnel (Tailscale Funnel or
+# cloudflared). Demo data lives in a named volume, separate from ./data.
+services:
+  demo:
+    build: ..
+    container_name: support_bot_demo
+    ports:
+      - "127.0.0.1:8765:8000"   # only reachable locally; the tunnel publishes it
+    environment:
+      - LLM_PROVIDER=ollama
+      - ANTHROPIC_API_KEY=
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:8b}
+      - OLLAMA_THINK=true       # ~6s replies, but follows the grounding rules best
+      - SEED_DEMO_KB=true
+      - ADMIN_TOKEN=            # leads + uploads stay disabled on the public demo
+      - CHAT_RATE_PER_MINUTE=10
+      - CHAT_DAILY_CAP=500
+      - TRUSTED_PROXY_HOPS=1
+      - CHROMA_PERSIST_DIR=/app/data/chroma
+      - DATABASE_URL=sqlite:////app/data/support_bot.db
+    volumes:
+      - demo-data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  demo-data:

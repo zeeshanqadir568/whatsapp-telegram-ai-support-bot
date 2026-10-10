@@ -16,6 +16,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 git -C "$ROOT" archive HEAD | tar -x -C "$WORK"
 rm -rf "$WORK/docs"   # screenshots/GIFs are not needed to run and bloat the Space
+cp "$ROOT/deploy/Dockerfile.hf" "$WORK/Dockerfile"   # Space image bundles Ollama + Qwen
 
 {
   cat <<'YAML'

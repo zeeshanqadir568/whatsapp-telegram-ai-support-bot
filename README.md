@@ -399,6 +399,9 @@ python eval_retrieval.py
 | `ANTHROPIC_MODEL` | Claude model name (default: `claude-sonnet-4-6`) | No |
 | `OLLAMA_BASE_URL` | Ollama server URL (default: `http://localhost:11434`) | No |
 | `OLLAMA_MODEL` | Ollama model name (default: `qwen2.5:7b`) | No |
+| `OLLAMA_THINK` | Let thinking models reason before answering (default: `false`) | No |
+| `OLLAMA_MAX_TOKENS` | Max answer tokens (default: `300`, or `1024` with thinking on) | No |
+| `OLLAMA_TIMEOUT` | Seconds to wait for an Ollama reply (default: `120`) | No |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token from BotFather | For Telegram integration |
 | `WHATSAPP_VERIFY_TOKEN` | Meta webhook verification token | For WhatsApp integration |
 | `WHATSAPP_APP_SECRET` | Meta app secret, verifies webhook signatures | For WhatsApp integration |

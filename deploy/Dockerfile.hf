@@ -1,0 +1,48 @@
+# Hugging Face Space image: the bot plus a local Ollama running a small Qwen
+# model, so the public demo needs no paid API key. deploy/push_to_hf_space.sh
+# ships this file to the Space as its Dockerfile.
+
+# CPU-only Ollama: drop the GPU runtimes (several GB) before copying it over
+FROM ollama/ollama:latest AS ollama
+RUN rm -rf /usr/lib/ollama/cuda* /usr/lib/ollama/rocm* /usr/lib/ollama/vulkan*
+
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    HF_HOME=/app/.cache/huggingface \
+    OLLAMA_MODELS=/app/.ollama/models \
+    OLLAMA_HOST=127.0.0.1:11434 \
+    LLM_PROVIDER=ollama \
+    OLLAMA_BASE_URL=http://127.0.0.1:11434 \
+    OLLAMA_MODEL=qwen3:1.7b \
+    PORT=8000
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=ollama /usr/bin/ollama /usr/bin/ollama
+COPY --from=ollama /usr/lib/ollama /usr/lib/ollama
+
+RUN useradd --create-home --uid 1000 app
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install -r requirements.txt
+
+# Bake both models into the image so a cold start never waits on a download
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+RUN ollama serve >/tmp/ollama.log 2>&1 & \
+    for i in $(seq 1 30); do curl -fsS http://127.0.0.1:11434/api/version >/dev/null && break; sleep 1; done; \
+    ollama pull "$OLLAMA_MODEL"
+
+COPY . .
+RUN mkdir -p /app/data/chroma /app/uploads && chown -R app:app /app
+USER app
+
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -fsS "http://localhost:${PORT}/health" || exit 1
+
+CMD ["sh", "deploy/start_hf.sh"]
