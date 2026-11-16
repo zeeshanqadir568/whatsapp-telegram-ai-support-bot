@@ -21,21 +21,66 @@ MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# /docs, /redoc and /openapi.json map every endpoint for an attacker; off unless asked for
+API_DOCS_ENABLED = os.getenv("ENABLE_API_DOCS", "false").lower() == "true"
+
 # Initialize FastAPI app
 app = FastAPI(
     title="WhatsApp / Telegram AI Support Bot API",
     description="Production-ready starter kit for RAG-grounded customer support.",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/docs" if API_DOCS_ENABLED else None,
+    redoc_url="/redoc" if API_DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if API_DOCS_ENABLED else None,
 )
 
-# Enable CORS for local Streamlit admin dashboard
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# Cross-origin access only for sites listed in ALLOWED_ORIGINS (comma separated). The
+# built-in dashboard is same-origin and needs none. No cookies are used, so credentials stay off.
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+if ALLOWED_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=ALLOWED_ORIGINS,
+        allow_credentials=False,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type", "X-Admin-Token"],
+    )
+
+# Who may show the app inside an iframe. Hugging Face Spaces needs https://huggingface.co.
+# .env loaders strip quotes, so a bare self / none keyword is quoted back here.
+FRAME_ANCESTORS = " ".join(
+    f"'{t}'" if t.lower() in ("self", "none") else t
+    for t in os.getenv("FRAME_ANCESTORS", "'self'").split()
+) or "'self'"
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "script-src-attr 'unsafe-inline'; "  # the dashboard's onclick="..." handlers
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
+    "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    f"frame-ancestors {FRAME_ANCESTORS}"
 )
+_DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Browser security headers on every response."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    # Swagger UI loads its own CDN scripts, so the docs pages (dev only) skip the CSP
+    if not request.url.path.startswith(_DOCS_PATHS):
+        response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+    # X-Frame-Options cannot list other sites; when one is allowed, frame-ancestors decides
+    if FRAME_ANCESTORS == "'self'":
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    return response
 
 # Global RAG Engine instance
 rag_engine = RAGEngine()
@@ -410,6 +455,6 @@ def read_root():
     index_path = os.path.join(static_dir, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
-    return {"message": "AI Support Bot API is running. Visit /docs for OpenAPI documentation."}
+    return {"message": "AI Support Bot API is running."}
 
 

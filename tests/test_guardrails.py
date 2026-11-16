@@ -29,8 +29,8 @@ KB = (
     ],
 )
 def test_audit_failures_are_blocked(reply):
-    # The user's own question is part of the allowed text, exactly as in production
-    assert check_reply(reply, KB + "\nAre you open on Sunday?") is not None
+    # The user's own question is passed as the conversation, exactly as in production
+    assert check_reply(reply, KB, "Are you open on Sunday?") is not None
 
 
 @pytest.mark.parametrize(
@@ -46,9 +46,10 @@ def test_grounded_replies_pass(reply):
     assert check_reply(reply, KB) is None
 
 
-def test_amounts_and_days_from_the_user_are_allowed():
-    allowed = KB + "\nI want to visit on Saturday, my budget is 10 crore."
-    assert check_reply("Noted: a visit on Saturday and a budget of 10 crore. Our team will call you.", allowed) is None
+def test_amounts_and_days_from_the_user_can_be_echoed_back():
+    said = "I want to visit on Saturday, my budget is 10 crore."
+    reply = "Noted: a visit on Saturday and a budget of 10 crore. Our team will call you."
+    assert check_reply(reply, KB, said) is None
 
 
 def test_sanitize_removes_instruction_lines_only():

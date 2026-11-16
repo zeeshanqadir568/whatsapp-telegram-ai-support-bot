@@ -16,7 +16,14 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 
-from guardrails import check_reply, safe_reply, sanitize_document_text
+from guardrails import (
+    check_reply,
+    is_override_request,
+    refusal_reply,
+    safe_reply,
+    sanitize_document_text,
+    scrub_internal_terms,
+)
 
 load_dotenv()
 
@@ -316,6 +323,12 @@ class RAGEngine:
         Returns:
             Tuple of (response_text, list_of_source_names, extracted_lead_dict)
         """
+        # 0. Refuse messages that try to script the reply ("reply only with ...") before
+        # the LLM sees them; small models tend to obey them.
+        if is_override_request(query):
+            logger.warning("Message refused: tries to script the reply")
+            return refusal_reply(query), [], self._extract_lead_heuristics(query)
+
         # 1. Retrieve relevant contexts
         docs = self.vector_manager.similarity_search(query, top_k=top_k)
         sources = list(set([doc.metadata.get("source", "Knowledge Base") for doc in docs]))
@@ -380,12 +393,14 @@ class RAGEngine:
                     "or share your contact details and our team will help you."
                 )
 
-        # Deterministic guard: never send payment requests, deal commitments, or amounts /
-        # days / times that are not in the retrieved context or the conversation.
-        block_reason = check_reply(response_text, f"{context_str}\n{history_str}\n{query}")
+        # Deterministic guard: never send payment or card requests, deal commitments, or
+        # amounts / percentages / days / times that are not in the retrieved context. The
+        # customer's own words may only be echoed back, never stated as business facts.
+        block_reason = check_reply(response_text, context_str, f"{history_str}\n{query}")
         if block_reason:
             logger.warning(f"Reply blocked by guardrail: {block_reason}")
             response_text = safe_reply(query)
+        response_text = scrub_internal_terms(response_text)
 
         # 5. Extract potential lead details (regex heuristics)
         extracted_lead = self._extract_lead_heuristics(query)
