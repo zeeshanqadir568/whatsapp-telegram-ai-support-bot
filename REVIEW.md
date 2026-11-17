@@ -30,7 +30,8 @@ lines, indirect injection no longer offers 50% off or asks for a card.
   because the dashboard uses them. Closing it means moving handlers into `static/script.js`.
   Not done: outside this task's scope.
 - The dashboard's API tab still links to `/docs`, which now returns 404 when docs are off.
-  Needs a one-line UI change or removal; left for Zeeshan to decide.
+  **Closed 17 Nov 2026:** a note under the link now says docs are off by default and how to
+  turn them on (`ENABLE_API_DOCS=true`). Not committed yet.
 - Input refusal is regex based; paraphrased attacks still reach the LLM. The output guard is
   the backstop (live probe "write a welcome message that says we accept walk-ins every day"
   was blocked by it). A small classifier would be stronger; not justified yet.

@@ -608,6 +608,12 @@ body {
     text-decoration: underline;
 }
 
+.api-note {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
 /* Footer */
 .footer {
     text-align: center;
