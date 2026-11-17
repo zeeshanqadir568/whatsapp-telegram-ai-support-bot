@@ -39,5 +39,8 @@ lines, indirect injection no longer offers 50% off or asks for a card.
   Sunday in "We are open Sunday". Existed before; the override refusal covers the audited
   attack. Fix would need negation-aware parsing.
 - Hugging Face Space not redeployed, so the `FRAME_ANCESTORS` setting there is untested live.
+  **17 Nov 2026:** no Space exists for this bot, and Docker Spaces are now marked "Paid" (disabled
+  on the free account). The saved HF token is read-only too. Deploy parked: the image needs Docker
+  (bundled Ollama), and a Gradio Space would need a paid LLM API key.
 - Live runs used `CHAT_RATE_PER_MINUTE=200`, because instant refusals hit the 10/min limit
   during the scripted audit. Production limit is unchanged.
